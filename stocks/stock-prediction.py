@@ -15,6 +15,9 @@ from lstm import LSTM
 spark = SparkSession.builder.appName("StockPrediction").config("spark.executor.memory", "70g").config("spark.driver.memory", "50g").config("spark.memory.offHeap.enabled",True).config("spark.memory.offHeap.size","16g").config("es.index.auto.create", "true").getOrCreate()
 spark.sparkContext.setLogLevel("ERROR")
 
+#lstm = LSTM(train_data=inputs, targets=targets, batch_size=4, debug=0, test=0)
+#lstm.loadModel("trainedModel")
+
 # Train and build the model if not available already
 def build_model(modelFile, inputFile):
     df = spark.read.option("inferSchema", "true").option("header", "true").csv(inputFile)    

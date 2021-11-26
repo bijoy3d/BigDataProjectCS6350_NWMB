@@ -3,6 +3,7 @@
 
 import numpy as np
 import pandas as pd
+import pickle
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 
@@ -253,12 +254,7 @@ class LSTM():
         plog("ipt T shape", ipt.T.shape)
         plog("po shape", po.shape)
             
-           # print("incoming input = ",ippo.T)
-
-        input_plus_prev_output = np.row_stack((ipt.T, po))
-        ippo = input_plus_prev_output
-
-            
+           
         # input activation
         self.input_activation = np.tanh((np.inner(wa.T, ipt)) + (np.inner(ua, po)) + ba)
         ia = self.input_activation
@@ -437,12 +433,13 @@ class LSTM():
             for ip in ipbatch:
                 plog("Round "+str(count)," ip is ",ip)
                 output = self.goForward(np.array([ip]), train=0)
-                if ipscaler and opscaler:
-                    print(f'Current Price : {round(ipscaler.inverse_transform(np.array([ip]))[0][0],3)} Next Price : {round(opscaler.inverse_transform(output)[0][0], 3)} \n')
-                else:
-                    print(f'input {ip} output {output}')
 
-            count+=1
+        if ipscaler and opscaler:
+            print(f'Current Price : {round(ipscaler.inverse_transform(np.array([ip]))[0][0],3)} Next Price : {round(opscaler.inverse_transform(output)[0][0], 3)} \n')
+            return round(opscaler.inverse_transform(output)[0][0], 3)
+        else:
+            print(f'input {ip} output {output}')
+            return output
         
     def goValidate(self, inputs, targets, opscaler=None, ipscaler=None, filename="pred.txt"):
         plog = self.plog
@@ -468,6 +465,27 @@ class LSTM():
                     print(f'input {ip} output {output}')
 
                 count+=1
+
+    def saveModel(self, filename):
+        with open(filename,"wb") as fp:
+            pickle.dump(p, fp)
+
+    def loadModel(self, filename):
+        with open(filename,"rb") as fp:
+            pickeledModel = pickle.load(fp)
+
+            self.wa=pickeledModel[0]
+            self.ua=pickeledModel[1]
+            self.ba=pickeledModel[2]
+            self.wi=pickeledModel[3]
+            self.ui=pickeledModel[4]
+            self.bi=pickeledModel[5]
+            self.wf=pickeledModel[6]
+            self.uf=pickeledModel[7]
+            self.bf=pickeledModel[8]
+            self.wo=pickeledModel[9]
+            self.uo=pickeledModel[10]
+            self.bo=pickeledModel[11]
 
 ## EXAMPLE CODE TO PREPARE DATASET AND RUN
 
