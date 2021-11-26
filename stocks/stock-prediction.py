@@ -19,31 +19,7 @@ spark.sparkContext.setLogLevel("ERROR")
 def build_model(modelFile, inputFile):
     df = spark.read.option("inferSchema", "true").option("header", "true").csv(inputFile)    
     
-    # opscaler = MinMaxScaler()
-    # ipscaler = MinMaxScaler()
-    # inputs=ip.copy()
-    # inputs.drop("Date", axis=1, inplace=True)
-
-    # targets = inputs.filter(["Open"], axis=1)
-    # targets.columns = ['target']
-    # targets["target"]=targets['target'][1:].reset_index(drop=True)
-    # targets.iloc[-1]['target'] = targets.iloc[:-1]['target'].mean()
-
-    # inputs[['Open','High','Low','Close','Volume','Trade_count','vwap']] = ipscaler.fit_transform(inputs[['Open','High','Low','Close','Volume','Trade_count','vwap']])
-    # targets[['target']] = opscaler.fit_transform(targets[['target']])
-    
-    # intrain, intest, optrain, optest = train_test_split(inputs, targets, test_size=0.2, shuffle=False)
-    
-    # lstm = LSTM(train_data=intrain, targets=optrain, batch_size=200, debug=0, test=0)
-    # lstm.train(epoch=2, lr=1)
-    
-    # lstm.goValidate(iptest, optest, opscaler, ipscaler)    
-        
-    # # Save the trained model to disk.
-    # lstm.write().overwrite().save(modelFile)
-
-    # Save the trained model to disk.
-    #cvModel.write().overwrite().save(modelFile)
+   
 
 # Load the model from the local file system to save on time. 
 def loadModel(modelFile):
@@ -56,16 +32,13 @@ def kafka_setup(trainedModel, kafkaListenServer, kafkaWriteServer, listenTopic, 
     
     # This function would send the Close Price to the trained model to find the predicted price.
     def prdeictStockPrice(cvModel):        
-        # prediction = trainedModel.transform(cvModel)
-        # converter = IndexToString(inputCol="prediction", outputCol="PredictedPrice", labels=labels)
-        # converted = converter.transform(prediction)
         selected = converted.select("Close", "PredictedPrice").withColumnRenamed("PredictedPrice","value")
         selected.writeStream.format("kafka").option("kafka.bootstrap.servers", kafkaWriteServer).option('topic', writeTopic).start()
         spark.streams.awaitAnyTermination()
 
     # The Close Price is read here from the Kafka topic to which the alpaca json was sent by the alpaca API
 
-    schema = StructType().add("Date", StringType()).add("Open", StringType()).add("Low", StringType()).add("High", StringType()).add("Close", StringType()).add("Volume", StringType()).add("vwap", StringType()).add("Trade_count", StringType())
+    schema = StructType().add("Open", StringType()).add("Low", StringType()).add("High", StringType()).add("Close", StringType()).add("Volume", StringType()).add("vwap", StringType()).add("Trade_count", StringType())
     # Create DataSet representing the stream of input lines from kafka
     lines = spark.readStream.format("kafka").option("kafka.bootstrap.servers", kafkaListenServer).option('subscribe', listenTopic).load().select(from_json(col("value").cast("string"), schema).alias("pdata"))
     closePrice = lines.select(col("pdata.Close").alias('Close'))
