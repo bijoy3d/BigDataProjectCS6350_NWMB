@@ -1,41 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
-
-
 import numpy as np
-import copy
-from io import StringIO
 import pandas as pd
-import matplotlib.pyplot as plt
-get_ipython().run_line_magic('matplotlib', 'inline')
-
-
-# In[2]:
-
-
-dataset=StringIO("""Date,Open,High,Low,Close,Volume,Trade_count,Vwap
-2015-12-01 09:00:00+00:00,118.88,118.94,118.88,118.94,1145,5,118.902052
-2015-12-01 09:15:00+00:00,118.77,118.77,118.77,118.77,200,1,118.77
-2015-12-01 09:30:00+00:00,118.69,118.69,118.6,118.6,900,4,118.61
-2015-12-01 09:45:00+00:00,118.64,118.65,118.64,118.65,3580,5,118.648883
-2015-12-01 10:00:00+00:00,118.65,118.65,118.55,118.55,1820,4,118.611538
-2015-12-01 10:15:00+00:00,118.55,118.6,118.55,118.6,880,5,118.5625
-2015-12-01 10:30:00+00:00,118.55,118.55,118.5,118.5,1878,5,118.513312
-2015-12-01 10:45:00+00:00,118.59,118.72,118.59,118.72,2499,10,118.628431
-2015-12-01 11:00:00+00:00,118.71,118.9,118.71,118.9,2842,11,118.86064
-2015-12-01 11:15:00+00:00,118.87,118.87,118.87,118.87,300,2,118.87
-2015-12-01 11:30:00+00:00,118.78,118.8,118.76,118.8,3914,22,118.785876
-2015-12-01 11:45:00+00:00,118.8,118.99,118.77,118.9,7900,37,118.893542
-2015-12-01 12:00:00+00:00,118.88,118.98,118.84,118.84,6540,34,118.922648
-2015-12-01 12:15:00+00:00,118.82,118.84,118.77,118.77,5603,28,118.804962
-2015-12-01 12:30:00+00:00,118.77,118.89,118.76,118.88,7612,31,118.824002
-""")
-df = pd.read_table(dataset, sep=",")
-
-
-# In[3]:
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
 
 
 def sigmoid(x):
@@ -48,10 +17,6 @@ def sigmoid(x):
     """
     x_safe = x + 1e-12
     return 1 / (1 + np.exp(-x_safe))
-
-
-# In[4]:
-
 
 class LSTM():
     def __init__(self, train_data, targets, batch_size=2, debug=1, test=1):
@@ -473,68 +438,58 @@ class LSTM():
                 plog("Round "+str(count)," ip is ",ip)
                 output = self.goForward(np.array([ip]), train=0)
                 if ipscaler and opscaler:
-                    print(f'Current Price : {round(ipscaler.inverse_transform(np.array([ip]))[0][0],3)}                             Next Price : {round(opscaler.inverse_transform(output)[0][0], 3)} \n')
+                    print(f'Current Price : {round(ipscaler.inverse_transform(np.array([ip]))[0][0],3)} Next Price : {round(opscaler.inverse_transform(output)[0][0], 3)} \n')
                 else:
                     print(f'input {ip} output {output}')
 
             count+=1
         
+    def goValidate(self, inputs, targets, opscaler=None, ipscaler=None, filename="pred.txt"):
+        plog = self.plog
+        ip_batches, _ = self.lstm_data_transform(inputs)
+        file = open(filename,"w")
+        file.close()
 
 
-# In[5]:
+        for ipbatch in ip_batches:
+            self.cleanLSTM()
+            #plog("Round "+str(count)," ipbatch is : ", ipbatch)
+            count = 0
+            for ip in ipbatch:
+                target = np.array([[targets.iloc[count]['target']]])
+                #plog("Round "+str(count)," ip is ",ip)
+                output = self.goForward(np.array([ip]), train=0)
+                if ipscaler and opscaler:
+                    res = f'Current : {round(ipscaler.inverse_transform(np.array([ip]))[0][0],3)} \tTarget : {round(opscaler.inverse_transform(target)[0][0], 3)} \tPredicted : {round(opscaler.inverse_transform(output)[0][0], 3)}\n'
+                    with open(filename, "a") as myfile:
+                        myfile.write(res)
+                    plog(res)
+                else:
+                    print(f'input {ip} output {output}')
+
+                count+=1
+
+## EXAMPLE CODE TO PREPARE DATASET AND RUN
+
+# ip=pd.read_csv('../dataset/apple_5min_data.csv')
 
 
-ip = np.array([[1,2],[0.5,3]])
-op= np.array([ [0.5],[1.25]])
+# opscaler = MinMaxScaler()
+# ipscaler = MinMaxScaler()
+# inputs=ip.copy()
+# inputs.drop("Date", axis=1, inplace=True)
 
-ip = np.array([[1,2],[0.5,3],[1,2],[0.5,3],[1,2],[0.5,3]])
-op= np.array([ [0.2],[0.8],[0.2],[0.8],[0.2],[0.8] ])
+# targets = inputs.filter(["Open"], axis=1)
+# targets.columns = ['target']
+# targets["target"]=targets['target'][1:].reset_index(drop=True)
+# targets.iloc[-1]['target'] = targets.iloc[:-1]['target'].mean()
 
-lstm = LSTM(train_data=ip, targets=op, batch_size=2, debug=0, test=0)
-lstm.train(epoch=3, lr=1)
+# inputs[['Open','High','Low','Close','Volume','Trade_count','vwap']] = ipscaler.fit_transform(inputs[['Open','High','Low','Close','Volume','Trade_count','vwap']])
+# targets[['target']] = opscaler.fit_transform(targets[['target']])
 
-
-# In[6]:
-
-
-ip = np.array([[1,2],[0.5,3],[1,2],[0.5,3],[1,2],[0.5,3]])
-op= np.array([ [0.5],[1.25],[0.5],[1.25],[0.5],[1.25] ])
-
-lstm.goPredict(ip)
+# intrain, intest, optrain, optest = train_test_split(inputs, targets, test_size=0.2, shuffle=False)
 
 
-# In[7]:
-
-
-from sklearn.preprocessing import MinMaxScaler
-opscaler = MinMaxScaler()
-ipscaler = MinMaxScaler()
-inputs=df.copy()
-inputs.drop("Date", axis=1, inplace=True)
-
-targets = inputs.filter(["Open"], axis=1)
-targets.columns = ['target']
-targets["target"]=targets['target'][1:].reset_index(drop=True)
-
-inputs[['Open','High','Low','Close','Volume','Trade_count','Vwap']] = ipscaler.fit_transform(inputs[['Open','High','Low','Close','Volume','Trade_count','Vwap']])
-targets[['target']] = opscaler.fit_transform(targets[['target']])
-
-
-# In[8]:
-
-
-lstm = LSTM(train_data=inputs, targets=targets, batch_size=4, debug=0, test=0)
-lstm.train(epoch=3001, lr=2)
-
-
-# In[10]:
-
-
-lstm.goPredict(inputs, opscaler, ipscaler)
-
-
-# In[ ]:
-
-
-
-
+# lstm = LSTM(train_data=intrain, targets=optrain, batch_size=200, debug=0, test=0)
+# lstm.train(epoch=2, lr=1)
+# lstm.goValidate(intest, optest, opscaler, ipscaler)
