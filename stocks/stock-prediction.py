@@ -11,6 +11,9 @@ from pyspark.streaming import StreamingContext
 from pyspark.sql.types import StringType, StructType
 from keras.models import Sequential
 from keras.layers import LSTM, Dense
+import sys
+sys.path.append("..")
+from lstm import LSTM 
 
 spark = SparkSession.builder.appName("StockPrediction").config("spark.executor.memory", "70g").config("spark.driver.memory", "50g").config("spark.memory.offHeap.enabled",True).config("spark.memory.offHeap.size","16g").config("es.index.auto.create", "true").getOrCreate()
 spark.sparkContext.setLogLevel("ERROR")
