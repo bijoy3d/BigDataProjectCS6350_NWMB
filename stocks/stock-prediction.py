@@ -9,11 +9,11 @@ from pyspark.sql.functions import col, from_json
 from pyspark import SparkContext
 from pyspark.streaming import StreamingContext
 from pyspark.sql.types import StringType, StructType
-from keras.models import Sequential
-from keras.layers import LSTM, Dense
 import sys
 sys.path.append("..")
 from lstm import LSTM 
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
 
 spark = SparkSession.builder.appName("StockPrediction").config("spark.executor.memory", "70g").config("spark.driver.memory", "50g").config("spark.memory.offHeap.enabled",True).config("spark.memory.offHeap.size","16g").config("es.index.auto.create", "true").getOrCreate()
 spark.sparkContext.setLogLevel("ERROR")
@@ -22,33 +22,28 @@ spark.sparkContext.setLogLevel("ERROR")
 def build_model(modelFile, inputFile):
     df = spark.read.option("inferSchema", "true").option("header", "true").csv(inputFile)
     
-    close_data = df['Close'].values
-    close_data = close_data.reshape((-1,1))
+    opscaler = MinMaxScaler()
+    ipscaler = MinMaxScaler()
+    inputs=ip.copy()
+    inputs.drop("Date", axis=1, inplace=True)
+
+    targets = inputs.filter(["Open"], axis=1)
+    targets.columns = ['target']
+    targets["target"]=targets['target'][1:].reset_index(drop=True)
+    targets.iloc[-1]['target'] = targets.iloc[:-1]['target'].mean()
+
+    inputs[['Open','High','Low','Close','Volume','Trade_count','vwap']] = ipscaler.fit_transform(inputs[['Open','High','Low','Close','Volume','Trade_count','vwap']])
+    targets[['target']] = opscaler.fit_transform(targets[['target']])
     
-    split_percent = 0.80
-    split = int(split_percent*len(close_data))
-
-    close_train = close_data[:split]
-    close_test = close_data[split:]
+    intrain, intest, optrain, optest = train_test_split(inputs, targets, test_size=0.2, shuffle=False)
     
-    look_back = 1
-
-    train_generator = TimeseriesGenerator(close_train, close_train, length=look_back, batch_size=20) 
-
-    cvModel = Sequential()
-    cvModel.add(
-        LSTM(10,
-            activation='relu',
-            input_shape=(look_back,1))
-    )
-    cvModel.add(Dense(1))
-    cvModel.compile(optimizer='adam', loss='mse')
-
-    num_epochs = 5
-    cvModel.fit_generator(train_generator, epochs=num_epochs, verbose=1)
-
+    lstm = LSTM(train_data=intrain, targets=optrain, batch_size=200, debug=0, test=0)
+    lstm.train(epoch=2, lr=1)
+    
+    lstm.goValidate(iptest, optest, opscaler, ipscaler)    
+        
     # Save the trained model to disk.
-    cvModel.write().overwrite().save(modelFile)
+    lstm.write().overwrite().save(modelFile)
 
 # Load the model from the local file system to save on time. 
 def loadModel(modelFile):
@@ -61,8 +56,6 @@ def kafka_setup(trainedModel, kafkaListenServer, kafkaWriteServer, listenTopic, 
     
     # This function would send the Close Price to the trained model to find the predicted price.
     def prdeictStockPrice(cvModel):        
-        prediction = trainedModel.transform(cvModel)
-        converter = IndexToString(inputCol="prediction", outputCol="PredictedPrice", labels=labels)
         converted = converter.transform(prediction)
         selected = converted.select("Close", "PredictedPrice").withColumnRenamed("PredictedPrice","value")
         selected.writeStream.format("kafka").option("kafka.bootstrap.servers", kafkaWriteServer).option('topic', writeTopic).start()
