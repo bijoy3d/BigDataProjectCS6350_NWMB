@@ -9,8 +9,7 @@ import sys
 import time 
 import shutil
 import pandas as pd
-sys.path.append("..")
-from lstm import LSTM 
+import lstm.LSTM as LSTM
 from pyspark.sql import SQLContext
 from sklearn.preprocessing import MinMaxScaler
 from pyspark.sql import Row
@@ -25,13 +24,14 @@ class StockPrediction():
         except OSError as e:
             print("Error: %s : %s" % (dir_path, e.strerror))
          
-        self.spark = SparkSession.builder.appName("StockPrediction").config("spark.executor.memory", "70g").config("spark.driver.memory", "50g").config("spark.memory.offHeap.enabled",True).config("spark.memory.offHeap.size","16g").config("es.index.auto.create", "true").getOrCreate()
+        self.spark = SparkSession.builder.appName("StockPrediction").config("spark.executor.memory", "70g").config("spark.driver.memory", "50g").config("spark.memory.offHeap.enabled",True).config("spark.memory.offHeap.size","16g").config("es.index.auto.create", "true").config('spark.sql.crossJoin.enabled',True).getOrCreate()
         self.spark.sparkContext.setLogLevel("ERROR")
         self.spark.conf.set("spark.sql.streaming.checkpointLocation", "/tmp/checkpoint")
         self.spark.sql("set spark.sql.caseSensitive=true")
         self.sc = self.spark.sparkContext;
         self.sqlContext = SQLContext(self.sc)	
-        self.df = self.spark.read.option("inferSchema", "true").option("header", "true").csv("/home/nithyashanmugam/TradeApp/apple_5min_data_1week.csv")
+        #self.df = self.spark.read.option("inferSchema", "true").option("header", "true").csv("/home/nithyashanmugam/TradeApp/apple_5min_data_1week.csv")
+        self.df = self.spark.read.option("inferSchema", "true").option("header", "true").csv("/home/nithyashanmugam/TradeApp/stream.csv")
         self.pdf = self.df.toPandas()        
         self.opscaler = MinMaxScaler()
         self.ipscaler = MinMaxScaler()
@@ -48,7 +48,16 @@ class StockPrediction():
 
     # This topic would be parsed by logstash and Kibana to show the analysis.
     def kafka_setup(self,kafkaListenServer, listenTopic):
-    
+        
+        def process_row_batch(row, epoch):
+            print("inside process row batch")            
+            print(row.show())
+            newDF = self.spark.read.option("inferSchema", "true").option("header", "true").csv('/home/nithyashanmugam/TradeApp/stream.csv' ) 
+            newDF = newDF.union(row) 
+            mainDF = newDF.toPandas()
+            mainDF = mainDF.iloc[1: , :]
+            mainDF.to_csv('/home/nithyashanmugam/TradeApp/stream.csv', index=False) 
+            print(mainDF.tail(5))            
         def process_row(row):   
            mainDF = pd.read_csv('/home/nithyashanmugam/TradeApp/stream.csv')      
            print(mainDF.tail(5))           
@@ -60,11 +69,29 @@ class StockPrediction():
            newDf.reset_index(drop=True, inplace=True) 
            mainNewDF = mainDF.append(newDf, ignore_index=False) 
            mainNewDF.reset_index(drop=True, inplace=True) 
+           mainNewDF = mainNewDF.iloc[1: , :]
            mainNewDF.to_csv('/home/nithyashanmugam/TradeApp/stream.csv', index=False)
            print(mainNewDF.tail(4))
            
+           opscaler = MinMaxScaler()
+           ipscaler = MinMaxScaler()
+           inputs=mainNewDF          
+           targets = inputs.filter(["Open"], axis=1)
+           targets.columns = ['target']
+           targets["target"]=targets['target'][1:].reset_index(drop=True)
+           targets.iloc[-1]['target'] = targets.iloc[:-1]['target'].mean()
+           inputs[['Open','High','Low','Close','Volume','Trade_count','vwap']] = ipscaler.fit_transform(inputs[['Open','High','Low','Close','Volume','Trade_count','vwap']])
+           targets[['target']] = opscaler.fit_transform(targets[['target']])           
+           #lstm = LSTM.LSTM(train_data=inputs, targets=targets, batch_size=288, debug=0, test=0)
+           #lstm.train(epoch=1, lr=1)
 
-        #datafrane.write to local csv file and after line 68 read the csv append to the main dataframe and predict
+          
+           #load saved trained model
+           #train the model with new batch
+           #save the new model
+           #predict price for next time step and print
+           #send it to kafka - actual price, predicted price
+           
         
         # This function would send the Close Price to the trained model to find the predicted price.
         def prdeictStockPrice(lines):        
@@ -84,8 +111,26 @@ class StockPrediction():
             
         #lines.writeStream.format("kafka").option("kafka.bootstrap.servers", kafkaWriteServer).option('topic', 'apache').start()
         #spark.streams.awaitAnyTermination()
-        lines = lines.writeStream.format("memory").foreach(process_row).option("checkpointLocation", "/tmp/checkpoint/").outputMode("append").start()          
-        lines.awaitTermination()
+        #lines = lines.writeStream.format("memory").foreach(process_row).option("checkpointLocation", "/tmp/checkpoint/").outputMode("append").start() 
+             
+        #mainDF = mainDF.join(lines) 
+        #lines = lines.writeStream.format("console").foreach(process_row).outputMode("append").start() 
+        lines = lines.writeStream.format("memory").foreachBatch(process_row_batch).option("checkpointLocation", "/tmp/checkpoint/").outputMode("append").start()         
+        
+        while True :
+            mainDF = self.spark.read.csv('/home/nithyashanmugam/TradeApp/stream.csv')   
+            #mainNewDF = mainDF.toPandas()
+            print("inside while")
+            print(mainDF)
+            time.sleep(5)
+             
+            
+        # header  = mainDF.first()[0]
+        # mainDF.filter(col("value").contains(header))
+        # mainDF = mainDF.iloc[1: , :]        
+        # #mainDF.write.csv('/home/nithyashanmugam/TradeApp/stream.csv')   
+        lines.awaitTermination()        
+        
         
 def main():     
     parser = argparse.ArgumentParser(description="Run Application to see Predicted Price for the stocks")
