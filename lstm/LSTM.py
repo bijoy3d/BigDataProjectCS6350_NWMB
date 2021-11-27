@@ -3,6 +3,8 @@
 
 import numpy as np
 import pandas as pd
+from io import StringIO
+
 import pickle
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
@@ -400,11 +402,11 @@ class LSTM():
         #print(op_batches)
         count = 1
         for runit in range (epoch):
-            plog("Running EPOCH ", runit+1, f=0)
+            print("Running EPOCH ", runit+1)
 
             for ipbatch,opbatch in zip(ip_batches, op_batches):
                 self.cleanLSTM()
-                plog("Round "+str(count)," ipbatch is : ", ipbatch)
+                print("Round "+str(count))
                 plog("Round "+str(count)," opbatch is : ", opbatch)
                 for ip in ipbatch:
                     plog("Round "+str(count)," ip is ",ip)
@@ -418,7 +420,7 @@ class LSTM():
                 plog("Round "+str(count), " NEW WEIGHTS")
                 #self.printLSTMparms()
                 count+=1
-            if runit % 100 ==0:
+            if runit % 10 ==0:
                 print("loss at epoch",runit,"is ", loss)
     
     def goPredict(self, inputs, opscaler=None, ipscaler=None):
@@ -487,9 +489,31 @@ class LSTM():
             self.uo=pickeledModel[10]
             self.bo=pickeledModel[11]
 
+
+
+
 ## EXAMPLE CODE TO PREPARE DATASET AND RUN
 
-# ip=pd.read_csv('../dataset/apple_5min_data.csv')
+# dataset=StringIO("""Date,Open,High,Low,Close,Volume,Trade_count,vwap
+# 2015-12-01 09:00:00+00:00,118.88,118.94,118.88,118.94,1145,5,118.902052
+# 2015-12-01 09:15:00+00:00,118.77,118.77,118.77,118.77,200,1,118.77
+# 2015-12-01 09:30:00+00:00,118.69,118.69,118.6,118.6,900,4,118.61
+# 2015-12-01 09:45:00+00:00,118.64,118.65,118.64,118.65,3580,5,118.648883
+# 2015-12-01 10:00:00+00:00,118.65,118.65,118.55,118.55,1820,4,118.611538
+# 2015-12-01 10:15:00+00:00,118.55,118.6,118.55,118.6,880,5,118.5625
+# 2015-12-01 10:30:00+00:00,118.55,118.55,118.5,118.5,1878,5,118.513312
+# 2015-12-01 10:45:00+00:00,118.59,118.72,118.59,118.72,2499,10,118.628431
+# 2015-12-01 11:00:00+00:00,118.71,118.9,118.71,118.9,2842,11,118.86064
+# 2015-12-01 11:15:00+00:00,118.87,118.87,118.87,118.87,300,2,118.87
+# 2015-12-01 11:30:00+00:00,118.78,118.8,118.76,118.8,3914,22,118.785876
+# 2015-12-01 11:45:00+00:00,118.8,118.99,118.77,118.9,7900,37,118.893542
+# 2015-12-01 12:00:00+00:00,118.88,118.98,118.84,118.84,6540,34,118.922648
+# 2015-12-01 12:15:00+00:00,118.82,118.84,118.77,118.77,5603,28,118.804962
+# 2015-12-01 12:30:00+00:00,118.77,118.89,118.76,118.88,7612,31,118.824002
+# """)
+# ip = pd.read_table(dataset, sep=",")
+
+# # ip=pd.read_csv('../dataset/apple_5min_data.csv')
 
 
 # opscaler = MinMaxScaler()
@@ -508,6 +532,6 @@ class LSTM():
 # intrain, intest, optrain, optest = train_test_split(inputs, targets, test_size=0.2, shuffle=False)
 
 
-# lstm = LSTM(train_data=intrain, targets=optrain, batch_size=200, debug=0, test=0)
+# lstm = LSTM(train_data=intrain, targets=optrain, batch_size=4, debug=0, test=0)
 # lstm.train(epoch=2, lr=1)
 # lstm.goValidate(intest, optest, opscaler, ipscaler)
