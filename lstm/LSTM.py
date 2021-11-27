@@ -406,7 +406,8 @@ class LSTM():
 
             for ipbatch,opbatch in zip(ip_batches, op_batches):
                 self.cleanLSTM()
-                print("Round "+str(count))
+                if count % 100 ==0:
+                    print("Round "+str(count))
                 plog("Round "+str(count)," opbatch is : ", opbatch)
                 for ip in ipbatch:
                     plog("Round "+str(count)," ip is ",ip)
@@ -420,8 +421,8 @@ class LSTM():
                 plog("Round "+str(count), " NEW WEIGHTS")
                 #self.printLSTMparms()
                 count+=1
-            if runit % 10 ==0:
-                print("loss at epoch",runit,"is ", loss)
+           # if runit % 10 ==0:
+            print("loss at epoch",runit,"is ", loss)
     
     def goPredict(self, inputs, opscaler=None, ipscaler=None):
         plog = self.plog
@@ -489,9 +490,7 @@ class LSTM():
             self.uo=pickeledModel[10]
             self.bo=pickeledModel[11]
 
-
-
-
+    
 ## EXAMPLE CODE TO PREPARE DATASET AND RUN
 
 # dataset=StringIO("""Date,Open,High,Low,Close,Volume,Trade_count,vwap

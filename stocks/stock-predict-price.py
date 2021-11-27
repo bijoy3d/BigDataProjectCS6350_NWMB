@@ -14,6 +14,9 @@ from lstm.StockPred import StockPred
 from pyspark.sql import SQLContext
 from sklearn.preprocessing import MinMaxScaler
 from pyspark.sql import Row
+from kafka import KafkaProducer
+from timeit import default_timer as timer
+
 
 mainDF = pd.read_csv('/home/nithyashanmugam/TradeApp/apple_5min_data_1week.csv')
 
@@ -34,15 +37,25 @@ class StockPrediction():
         self.df = self.spark.read.option("inferSchema", "true").option("header", "true").csv("/home/nithyashanmugam/TradeApp/apple_5min_data_1week.csv")
         #self.df = self.spark.read.option("inferSchema", "true").option("header", "true").csv("/home/nithyashanmugam/TradeApp/stream.csv")
         self.lastdate = self.df.orderBy('Date',ascending=False).take(1)[0][0]
-        
+        self.predictedPrice = 0
+        self.modelPath = "/home/nithyashanmugam/TradeApp/trainedModel"
         print(self.lastdate)  
         self.pdf = self.df.toPandas()        
         self.opscaler = MinMaxScaler()
-        self.ipscaler = MinMaxScaler()       
+        self.ipscaler = MinMaxScaler() 
+        
+        # Messages will be serialized as JSON 
+        def serializer(message):
+            return json.dumps(message).encode('utf-8')
+        # Kafka Producer
+        self.producer = KafkaProducer(bootstrap_servers=['localhost:9092'],value_serializer=serializer)    
         #self.cleanDataset()
         print(self.df.show(10))   
        
-        
+ 
+
+
+    
     def cleanDataset(self) :        
         self.df = self.df.drop("Date")         
         global mainDF        
@@ -124,26 +137,34 @@ class StockPrediction():
         while True :
             mainDF = self.spark.read.option("inferSchema", "true").option("header", "true").csv('/home/nithyashanmugam/TradeApp/stream.csv')
             newdate = mainDF.orderBy('Date',ascending=False).take(1)[0][0]
-            print(mainDF.orderBy('Date',ascending=False).show(5))
-            print("inside while after orderBy Date")
-            print(newdate,self.lastdate)
+            closePrice = mainDF.orderBy('Date',ascending=False).take(4)[0][0]            
+           
             if newdate != self.lastdate : 
-                self.lastdate = newdate             
+                self.lastdate = newdate  
+                
                 print("we got new record")
-                stocks = StockPred(mainDF.toPandas())
-                stocks.train_data(batch_size=144, epoch=1)
-                print("PREDICTION DONE")
-                #stocks.validate()
-            #mainNewDF = mainDF.toPandas()
-           # print("inside while")
-            #print(mainDF)
-            time.sleep(5)
-             
+                start = timer()                 
+                stocks = StockPred(mainDF.toPandas(),batch_size=72)
+                #load saved model here
+                stocks.loadModel(self.modelPath)
+                #stocks.train_data(epoch=4)
+                
+                #save the model 
+                stocks.saveModel(self.modelPath)
+                  
+                self.predictedPrice = stocks.predict();
+                print("PREDICTION DONE",self.predictedPrice)
+                print("Trainign took :", timer()-start) 
+              
+                #predict the price and send to kafka
+                body = {
+                    "currentPrice": str(closePrice),
+                    "predictedPrice": str(self.predictedPrice)
+                }
+                self.producer.send('apache',body)
+            time.sleep(5)            
             
-        # header  = mainDF.first()[0]
-        # mainDF.filter(col("value").contains(header))
-        # mainDF = mainDF.iloc[1: , :]        
-        # #mainDF.write.csv('/home/nithyashanmugam/TradeApp/stream.csv')   
+         
         lines.awaitTermination()        
         
         

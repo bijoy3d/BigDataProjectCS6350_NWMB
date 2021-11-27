@@ -3,7 +3,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 
 class StockPred():
-    def __init__(self, inputs):
+    def __init__(self, inputs, batch_size=144):
         self.opscaler = MinMaxScaler()
         self.ipscaler = MinMaxScaler()
         self.inputs=inputs
@@ -13,7 +13,8 @@ class StockPred():
         self.targets["target"]=self.targets['target'][1:].reset_index(drop=True)
         self.targets.iloc[-1]['target'] = self.targets.iloc[:-1]['target'].mean()
         self.scale_data()
-        self.split_data()
+        self.lstm = LSTM(train_data=self.inputs, targets=self.targets, batch_size=batch_size, debug=0, test=0)
+        #self.split_data()
     
     def scale_data(self):
         self.inputs[['Open','High','Low','Close','Volume','Trade_count','vwap']] = self.ipscaler.fit_transform(self.inputs[['Open','High','Low','Close','Volume','Trade_count','vwap']])
@@ -22,9 +23,17 @@ class StockPred():
     def split_data(self):
         self.iptrain, self.iptest, self.optrain, self.optest = train_test_split(self.inputs, self.targets, test_size=0.2, shuffle=False)
         
-    def train_data(self, epoch=3, lr=1, batch_size=288):
-        self.lstm = LSTM(train_data=self.iptrain, targets=self.optrain, batch_size=batch_size, debug=0, test=0)
-        self.lstm.train(epoch=epoch, lr=1)
+    def train_data(self, epoch=3, lr=1):
+        self.lstm.train(epoch=epoch, lr=lr)
         
+    def predict(self):
+        return self.lstm.goPredict(self.inputs, opscaler=self.opscaler, ipscaler=self.ipscaler)
+
+    def loadModel(self, filepath):
+        self.lstm.loadModel(filepath)
+
+    def saveModel(self, filepath):
+        self.lstm.loadModel(filepath)
+
     def validate(self):
         self.lstm.goValidate(self.iptest, self.optest, self.opscaler, self.ipscaler)
