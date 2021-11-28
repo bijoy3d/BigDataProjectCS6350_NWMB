@@ -16,9 +16,8 @@ from sklearn.preprocessing import MinMaxScaler
 from pyspark.sql import Row
 from kafka import KafkaProducer
 from timeit import default_timer as timer
+import json 
 
-
-mainDF = pd.read_csv('/home/nithyashanmugam/TradeApp/apple_5min_data_1week.csv')
 
 class StockPrediction():
     def __init__(self):      
@@ -34,8 +33,7 @@ class StockPrediction():
         self.spark.sql("set spark.sql.caseSensitive=true")
         self.sc = self.spark.sparkContext;
         self.sqlContext = SQLContext(self.sc)	
-        self.df = self.spark.read.option("inferSchema", "true").option("header", "true").csv("/home/nithyashanmugam/TradeApp/apple_5min_data_1week.csv")
-        #self.df = self.spark.read.option("inferSchema", "true").option("header", "true").csv("/home/nithyashanmugam/TradeApp/stream.csv")
+        self.df = self.spark.read.option("inferSchema", "true").option("header", "true").csv("/home/nithyashanmugam/TradeApp/stream.csv")   
         self.lastdate = self.df.orderBy('Date',ascending=False).take(1)[0][0]
         self.predictedPrice = 0
         self.modelPath = "/home/nithyashanmugam/TradeApp/trainedModel"
@@ -48,76 +46,21 @@ class StockPrediction():
         def serializer(message):
             return json.dumps(message).encode('utf-8')
         # Kafka Producer
-        self.producer = KafkaProducer(bootstrap_servers=['localhost:9092'],value_serializer=serializer)    
-        #self.cleanDataset()
-        print(self.df.show(10))   
-       
- 
-
-
-    
-    def cleanDataset(self) :        
-        self.df = self.df.drop("Date")         
-        global mainDF        
-        mainDF = mainDF.drop(["Date"], axis=1)
-       
+        self.producer = KafkaProducer(bootstrap_servers=['localhost:9092'],value_serializer=serializer)     
 
     # This topic would be parsed by logstash and Kibana to show the analysis.
     def kafka_setup(self,kafkaListenServer, listenTopic):
         
-        def process_row_batch(row, epoch):
-            print("inside process row batch")  
+        def process_row_batch(row, epoch):              
             if row.count() > 0:    
-                print("inside row count")
+                print("inside row count", row.show())
                 newDF = self.spark.read.option("inferSchema", "true").option("header", "true").csv('/home/nithyashanmugam/TradeApp/stream.csv' ) 
                 newDF = newDF.union(row) 
                 mainDF = newDF.toPandas()
                 mainDF = mainDF.iloc[1: , :]
-                mainDF.to_csv('/home/nithyashanmugam/TradeApp/stream.csv', index=False) 
-            #print(mainDF.tail(5))            
-        def process_row(row):   
-           mainDF = pd.read_csv('/home/nithyashanmugam/TradeApp/stream.csv')      
-           print(mainDF.tail(5))           
-           print("inside process row ")
-           column_names = ["Open", "High", "Low","Close","Volume","Trade_count","vwap"]
-           newDf = pd.DataFrame(row)   
-           newDf = newDf.T
-           newDf.columns = column_names           
-           newDf.reset_index(drop=True, inplace=True) 
-           mainNewDF = mainDF.append(newDf, ignore_index=False) 
-           mainNewDF.reset_index(drop=True, inplace=True) 
-           mainNewDF = mainNewDF.iloc[1: , :]
-           mainNewDF.to_csv('/home/nithyashanmugam/TradeApp/stream.csv', index=False)
-           print(mainNewDF.tail(4))
+                mainDF.to_csv('/home/nithyashanmugam/TradeApp/stream.csv', index=False)        
            
-           opscaler = MinMaxScaler()
-           ipscaler = MinMaxScaler()
-           inputs=mainNewDF          
-           targets = inputs.filter(["Open"], axis=1)
-           targets.columns = ['target']
-           targets["target"]=targets['target'][1:].reset_index(drop=True)
-           targets.iloc[-1]['target'] = targets.iloc[:-1]['target'].mean()
-           inputs[['Open','High','Low','Close','Volume','Trade_count','vwap']] = ipscaler.fit_transform(inputs[['Open','High','Low','Close','Volume','Trade_count','vwap']])
-           targets[['target']] = opscaler.fit_transform(targets[['target']])           
-           #lstm = LSTM.LSTM(train_data=inputs, targets=targets, batch_size=288, debug=0, test=0)
-           #lstm.train(epoch=1, lr=1)
-
-          
-           #load saved trained model
-           #train the model with new batch
-           #save the new model
-           #predict price for next time step and print
-           #send it to kafka - actual price, predicted price
            
-        
-        # This function would send the Close Price to the trained model to find the predicted price.
-        def prdeictStockPrice(lines):        
-            selected = lines.select("Close", "PredictedPrice").withColumnRenamed("PredictedPrice","value")
-            selected.writeStream.format("kafka").option("kafka.bootstrap.servers", kafkaWriteServer).option('topic', writeTopic).start()
-            self.spark.streams.awaitAnyTermination()
-
-        
-        
         # The Close Price is read here from the Kafka topic to which the alpaca json was sent by the alpaca API
         #dataframe -> csv 
         schema = StructType().add("Date", StringType()).add("Open", StringType()).add("Low", StringType()).add("High", StringType()).add("Close", StringType()).add("Volume", StringType()).add("vwap", StringType()).add("Trade_count", StringType())
@@ -125,19 +68,15 @@ class StockPrediction():
        
         lines = self.spark.readStream.format("kafka").option("kafka.bootstrap.servers", kafkaListenServer).option('subscribe', listenTopic).load().select(from_json(col("value").cast("string"), schema).alias("pdata"))      
         lines = lines.select(col("pdata.Date").alias('Date'),col("pdata.Open").alias('Open'),col("pdata.High").alias('High'),col("pdata.Low").alias('Low'),col("pdata.Close").alias('Close'),col("pdata.Volume").alias('Volume'),col("pdata.Trade_count").alias('Trade_count'),col("pdata.vwap").alias('vwap'))    
-            
-        #lines.writeStream.format("kafka").option("kafka.bootstrap.servers", kafkaWriteServer).option('topic', 'apache').start()
-        #spark.streams.awaitAnyTermination()
-        #lines = lines.writeStream.format("memory").foreach(process_row).option("checkpointLocation", "/tmp/checkpoint/").outputMode("append").start() 
-             
-        #mainDF = mainDF.join(lines) 
-        #lines = lines.writeStream.format("console").foreach(process_row).outputMode("append").start() 
+        
         lines = lines.writeStream.format("memory").foreachBatch(process_row_batch).option("checkpointLocation", "/tmp/checkpoint/").outputMode("append").start()         
         
         while True :
             mainDF = self.spark.read.option("inferSchema", "true").option("header", "true").csv('/home/nithyashanmugam/TradeApp/stream.csv')
             newdate = mainDF.orderBy('Date',ascending=False).take(1)[0][0]
-            closePrice = mainDF.orderBy('Date',ascending=False).take(4)[0][0]            
+            closePrice = mainDF.orderBy('Date',ascending=False).take(1)[0][4]
+           
+            print(newdate,self.lastdate)            
            
             if newdate != self.lastdate : 
                 self.lastdate = newdate  
@@ -154,14 +93,16 @@ class StockPrediction():
                   
                 self.predictedPrice = stocks.predict();
                 print("PREDICTION DONE",self.predictedPrice)
-                print("Trainign took :", timer()-start) 
+                print("Training took :", timer()-start) 
               
                 #predict the price and send to kafka
                 body = {
-                    "currentPrice": str(closePrice),
-                    "predictedPrice": str(self.predictedPrice)
+                    "currentPrice": float(closePrice),
+                    "predictedPrice": float(self.predictedPrice)
                 }
-                self.producer.send('apache',body)
+                self.producer.send('apache', body)
+                self.producer.flush()
+                
             time.sleep(5)            
             
          
