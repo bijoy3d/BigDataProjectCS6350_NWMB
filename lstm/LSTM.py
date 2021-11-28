@@ -471,6 +471,7 @@ class LSTM():
 
     def saveModel(self, filename):
         with open(filename,"wb") as fp:
+            p=self.getLSTMparms()
             pickle.dump(p, fp)
 
     def loadModel(self, filename):
