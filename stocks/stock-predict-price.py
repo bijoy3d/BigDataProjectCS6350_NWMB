@@ -1,19 +1,14 @@
 import argparse
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, from_json
-from pyspark import SparkContext
-from threading import Thread
-from pyspark.streaming import StreamingContext
 from pyspark.sql.types import StringType, StructType
-import sys
 import time 
 import shutil
-import pandas as pd
-import lstm.LSTM as LSTM
-from lstm.StockPred import StockPred
+import sys
+sys.path.append("..")
+from lstm import StockPred
 from pyspark.sql import SQLContext
 from sklearn.preprocessing import MinMaxScaler
-from pyspark.sql import Row
 from kafka import KafkaProducer
 from timeit import default_timer as timer
 import json 
