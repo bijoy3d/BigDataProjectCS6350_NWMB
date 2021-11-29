@@ -2,16 +2,10 @@ import argparse
 from StockPred import StockPred
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, from_json
-from pyspark import SparkContext
 from threading import Thread
-from pyspark.streaming import StreamingContext
 from pyspark.sql.types import StringType, StructType, DoubleType
 import time 
 import shutil
-import sys
-#sys.path.append("..")
-#from ..lstm.StockPred import StockPred
-#from ..StockPredlstm.StockPred import StockPred
 from pyspark.sql import SQLContext
 from sklearn.preprocessing import MinMaxScaler
 from kafka import KafkaProducer
@@ -39,8 +33,6 @@ class StockPrediction():
         self.predictedPrice = 0
         self.prevPredictedPrice = 0
         self.modelPath = "C:\\Users\\bijpraka\\OneDrive - The University of Texas at Dallas\\Semester 4\\Big Data Management and Analytics\\Project\\stocksgithub\\BigDataProjectCS6350_NWMB\\stocks\\trainedModel"
-
-        print(self.lastdate)  
         self.pdf = self.df.toPandas()        
         self.opscaler = MinMaxScaler()
         self.ipscaler = MinMaxScaler() 
@@ -68,7 +60,6 @@ class StockPrediction():
         # The Close Price is read here from the Kafka topic to which the alpaca json was sent by the alpaca API
         #dataframe -> csv 
         schema = StructType().add("Date", StringType()).add("Open", DoubleType()).add("Low", DoubleType()).add("High", DoubleType()).add("Close", DoubleType()).add("Volume", DoubleType()).add("vwap", DoubleType()).add("Trade_count", DoubleType())
-        #schema = StructType().add("Date", StringType()).add("Open", StringType()).add("Low", StringType()).add("High", StringType()).add("Close", StringType()).add("Volume", StringType()).add("vwap", StringType()).add("Trade_count", StringType())
         # Create DataSet representing the stream of input lines from kafka
        
         lines = self.spark.readStream.format("kafka").option("kafka.bootstrap.servers", kafkaListenServer).option('subscribe', listenTopic).load().select(from_json(col("value").cast("string"), schema).alias("pdata"))      
@@ -89,7 +80,7 @@ class StockPrediction():
                 
                     print("New price set from market. Start Training and Prediction Module")
                     start = timer()                 
-                    stocks = StockPred(mainDF.toPandas(),batch_size=72, isGPU=0)
+                    stocks = StockPred(mainDF.toPandas(),batch_size=72, isGPU=1)
                     #load saved model here
                     stocks.loadModel(self.modelPath)
                     stocks.train_data(epoch=3)
@@ -107,9 +98,8 @@ class StockPrediction():
                         "predictedPrice": float(self.prevPredictedPrice)
                     }
                     if(self.prevPredictedPrice != 0):
-                        #self.producer.send('trades', body)
-                        #self.producer.flush()
-                        print("send to kafka")
+                        self.producer.send('trades', body)
+                        self.producer.flush()
                 
                     self.prevPredictedPrice = self.predictedPrice
             except Exception as e:
@@ -135,17 +125,6 @@ def main():
     args = parser.parse_args()
     
     stock = StockPrediction()
-    
-    ##TEST CODE
-    #spark = SparkSession.builder.appName("StockPrediction").config("spark.executor.memory", "70g").config("spark.driver.memory", "50g").config("spark.memory.offHeap.enabled",True).config("spark.memory.offHeap.size","16g").config("es.index.auto.create", "true").config('spark.sql.crossJoin.enabled',True).getOrCreate()
-    #spark.sparkContext.setLogLevel("ERROR")
-    #spark.conf.set("spark.sql.streaming.checkpointLocation", "/tmp/checkpoint")
-        
-    #mainDF = spark.read.option("inferSchema", "true").option("header", "true").csv('/home/nithyashanmugam/TradeApp/apple_data_new.csv')    
-    #stocks = StockPred(mainDF.toPandas(),batch_size=72)
-    
-    ## TESTCODE END
-    
     stock.kafka_setup(args.kafkaListenServer, args.listenTopic)  
     
     
