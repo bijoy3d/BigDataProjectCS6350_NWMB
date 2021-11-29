@@ -128,7 +128,21 @@ def init(train_data, targets, batch_size=2, debug=1, test=1):
 
 @jit
 def cleanLSTM(p):
-    wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives = p
+    # try:
+    #     wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives = p
+    # except:
+    wa = p[0]
+    ua = p[1]
+    ba = p[2]
+    wi = p[3]
+    ui = p[4]
+    bi = p[5]
+    wf = p[6]
+    uf = p[7]
+    bf = p[8]
+    wo = p[9]
+    uo = p[10]
+    bo = p[11]
     # Forward Propogation Parameters
     prev_input_activation = 0
     prev_input_gate = 0
@@ -446,12 +460,12 @@ def travelBack(p, targets, inputs):
 @jit
 def train(p,batch_size, targets, train_data, epoch=2, lr=.01):
     ip_batches, op_batches = lstm_data_transform(batch_size, targets, train_data=train_data)
-    #print(op_batches)
-    count = 1
-    runit=0
-    for runit in range (epoch):
-        print("Running EPOCH ", runit+1)
 
+    #print(op_batches)
+    runit=1
+    for runit in range (epoch):
+        print("Running EPOCH ", runit)
+        count = 1
         for ipbatch,opbatch in zip(ip_batches, op_batches):
             p=cleanLSTM(p)
             if count % 100 ==0:
@@ -459,17 +473,10 @@ def train(p,batch_size, targets, train_data, epoch=2, lr=.01):
             for ip in ipbatch:
                 p1 = goForward(p,np.array([ip]))
             p2 = travelBack(p1, opbatch, np.array([ipbatch]))
-#             if count % 1000 ==0:
-#                 print("loss at count",count,"is ", loss)
-
-            #printLSTMparms()
             p3=update_lstmData(p2, lr)
             p=p3
 
-            #printLSTMparms()
             count+=1
-#         if runit % 100 ==0:
-       # print("loss at epoch",runit,"is ", loss)
     return p
 
 @jit
@@ -484,7 +491,7 @@ def goPredict(p, targets, inputs, batch_size, opscaler=None, ipscaler=None):
         #plog("Round "+str(count)," ipbatch is : ", ipbatch)
 
         for ip in ipbatch:
-            #plog("Round "+str(count)," ip is ",ip)
+            print("Round "+str(count))
             p = goForward(p, np.array([ip]), train=0)
             wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives = p
             if ipscaler and opscaler:
@@ -494,6 +501,12 @@ def goPredict(p, targets, inputs, batch_size, opscaler=None, ipscaler=None):
                 print(f'input {ip} output {output}')
 
         count+=1
+    if ipscaler and opscaler:
+        print(f'Current Price : {round(ipscaler.inverse_transform(np.array([ip]))[0][0],3)} Next Price : {round(opscaler.inverse_transform(output)[0][0], 3)} \n')
+        return round(opscaler.inverse_transform(output)[0][0], 3)
+    else:
+        print(f'input {ip} output {output}')
+        return output
 
 @jit
 def goValidate(p, inputs, targets, batch_size, opscaler=None, ipscaler=None, filename="pred.txt"):
@@ -522,3 +535,26 @@ def goValidate(p, inputs, targets, batch_size, opscaler=None, ipscaler=None, fil
                 print(f'input {ip} output {output}')
 
         count+=1
+
+def saveModel(filename, p):
+    with open(filename,"wb") as fp:
+        pickle.dump(p, fp)
+
+def loadModel(filename):
+    with open(filename,"rb") as fp:
+        pickeledModel = pickle.load(fp)
+
+        wa=pickeledModel[0]
+        ua=pickeledModel[1]
+        ba=pickeledModel[2]
+        wi=pickeledModel[3]
+        ui=pickeledModel[4]
+        bi=pickeledModel[5]
+        wf=pickeledModel[6]
+        uf=pickeledModel[7]
+        bf=pickeledModel[8]
+        wo=pickeledModel[9]
+        uo=pickeledModel[10]
+        bo=pickeledModel[11]
+
+        return wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo
