@@ -399,7 +399,6 @@ class LSTM():
     def train(self, epoch=2, lr=.01):
         plog = self.plog
         ip_batches, op_batches = self.lstm_data_transform()
-        #print(op_batches)
         count = 1
         for runit in range (epoch):
             print("Running EPOCH ", runit+1)
@@ -407,7 +406,7 @@ class LSTM():
             for ipbatch,opbatch in zip(ip_batches, op_batches):
                 self.cleanLSTM()
                 if count % 100 ==0:
-                    print("Round "+str(count))
+                    print("Runnign Batch "+str(count))
                 plog("Round "+str(count)," opbatch is : ", opbatch)
                 for ip in ipbatch:
                     plog("Round "+str(count)," ip is ",ip)
@@ -416,13 +415,10 @@ class LSTM():
                 plog("Round "+str(count)," Forward and Backward DONE", f=0)
                 plog("Round "+str(count)," OP DONE")
                 plog("Round "+str(count)," OLD WEIGHTS")
-                #self.printLSTMparms()
                 self.update_lstmData(lr)
                 plog("Round "+str(count), " NEW WEIGHTS")
-                #self.printLSTMparms()
                 count+=1
-           # if runit % 10 ==0:
-            print("loss at epoch",runit,"is ", loss)
+            print("loss at epoch",runit+1,"is ", loss)
     
     def goPredict(self, inputs, opscaler=None, ipscaler=None):
         plog = self.plog

@@ -469,7 +469,7 @@ def train(p,batch_size, targets, train_data, epoch=2, lr=.01):
         for ipbatch,opbatch in zip(ip_batches, op_batches):
             p=cleanLSTM(p)
             if count % 100 ==0:
-                print("Round ipbatch", count)
+                print("Running Batch", count)
             for ip in ipbatch:
                 p1 = goForward(p,np.array([ip]))
             p2 = travelBack(p1, opbatch, np.array([ipbatch]))
@@ -484,23 +484,15 @@ def goPredict(p, targets, inputs, batch_size, opscaler=None, ipscaler=None):
 
     wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives = p
     ip_batches, _ = lstm_data_transform(batch_size, targets, ip=inputs)
-    count = 1
 
     for ipbatch in ip_batches:
         p=cleanLSTM(p)
         #plog("Round "+str(count)," ipbatch is : ", ipbatch)
 
         for ip in ipbatch:
-            print("Round "+str(count))
             p = goForward(p, np.array([ip]), train=0)
             wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives = p
-            if ipscaler and opscaler:
-                print(f'Current Price : {round(ipscaler.inverse_transform(np.array([ip]))[0][0],3)} \
-                        Next Price : {round(opscaler.inverse_transform(output)[0][0], 3)} \n')
-            else:
-                print(f'input {ip} output {output}')
 
-        count+=1
     if ipscaler and opscaler:
         print(f'Current Price : {round(ipscaler.inverse_transform(np.array([ip]))[0][0],3)} Next Price : {round(opscaler.inverse_transform(output)[0][0], 3)} \n')
         return round(opscaler.inverse_transform(output)[0][0], 3)
