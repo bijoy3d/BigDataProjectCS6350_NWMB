@@ -399,10 +399,10 @@ class LSTM():
     def train(self, epoch=2, lr=.01):
         plog = self.plog
         ip_batches, op_batches = self.lstm_data_transform()
-        count = 1
+        
         for runit in range (epoch):
             print("Running EPOCH ", runit+1)
-
+            count = 1
             for ipbatch,opbatch in zip(ip_batches, op_batches):
                 self.cleanLSTM()
                 if count % 100 ==0:
