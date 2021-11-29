@@ -44,7 +44,6 @@ def alpaca():
 
     def on_message(ws, message):        
         allowed=['b']
-        #print(f'Sending @ {datetime.now()} | Message = {str(message)[1:-1]}')
         msgjson = json.loads(message[1:-1])
         if(msgjson['T'] in allowed):  
             print(msgjson)
@@ -60,9 +59,8 @@ def alpaca():
             }            
             producer.send('messages', body)
         
-        # Sleep for a random number of seconds
-        #time_to_sleep = random.randint(1, 11)
-        time.sleep(2)
+        # Get data every 5 mins
+        time.sleep(300)
 
     def on_close(ws, close_status, closemessage):
         print("closed connection ", closemessage)        
@@ -82,22 +80,8 @@ def alpaca():
 
 def aftermarket():   
     for index, row in data.iterrows():  
-        #print(json.dumps(json.loads(row.to_json(date_format = "iso",orient = "columns"))))
         producer.send('messages', json.loads(row.to_json(date_format = "iso")))
         time.sleep(300)
-    #csv_file = pd.DataFrame(pd.read_csv("apple_data.csv", sep = ",", header = 0, index_col = False))
-    #csv_file.to_json("dummy_new", orient = "records", date_format = "epoch", double_precision = 10, force_ascii = True, date_unit = "ms", default_handler = None)
-    
-    #while(1):
-#     with open('dummy_new') as f:
-#         lines = f.readlines()
-#         for line in lines:              
-#             print(json.loads(line))
-#             #producer.send('messages', json.loads(line))
-#             # Sleep for a random number of seconds
-#             time_to_sleep = random.randint(1, 10)
-#             time.sleep(3)
-
 
 if __name__ == '__main__':
 
