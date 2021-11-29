@@ -3,13 +3,9 @@
 
 import time 
 import json 
-import random 
-from datetime import datetime
 from kafka import KafkaProducer
 import alpaca_trade_api as tradeapi
 from alpaca_trade_api.stream import Stream
-from alpaca_trade_api.common import URL
-import threading
 import websocket
 import pandas as pd
 
@@ -19,7 +15,6 @@ print(data)
 # Messages will be serialized as JSON 
 def serializer(message):
     return json.dumps(message).encode('utf-8')
-
 
 # Kafka Producer
 producer = KafkaProducer(
@@ -82,6 +77,7 @@ def aftermarket():
     for index, row in data.iterrows():  
         producer.send('messages', json.loads(row.to_json(date_format = "iso")))
         time.sleep(300)
+
 
 if __name__ == '__main__':
 
