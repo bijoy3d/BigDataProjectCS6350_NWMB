@@ -27,7 +27,7 @@ class StockPrediction():
         self.spark.sql("set spark.sql.caseSensitive=true")
         self.sc = self.spark.sparkContext;
         self.sqlContext = SQLContext(self.sc)	
-        self.datasetPath = 'C:\\Users\\bijpraka\\OneDrive - The University of Texas at Dallas\\Semester 4\\Big Data Management and Analytics\\Project\\stocksgithub\\BigDataProjectCS6350_NWMB\\dataset\\apple_data_new.csv'
+        self.datasetPath = 'C:\\Users\\bijpraka\\OneDrive - The University of Texas at Dallas\\Semester 4\\Big Data Management and Analytics\\Project\\stocksgithub\\BigDataProjectCS6350_NWMB\\dataset\\apple_data.csv'
         self.df = self.spark.read.option("inferSchema", "true").option("header", "true").csv(self.datasetPath)   
         self.lastdate = self.df.orderBy('Date',ascending=False).take(1)[0][0]
         self.predictedPrice = 0
