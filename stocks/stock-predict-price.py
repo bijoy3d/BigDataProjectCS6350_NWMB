@@ -83,7 +83,7 @@ class StockPrediction():
                     stocks = StockPred(mainDF.toPandas(),batch_size=72, isGPU=1)
                     #load saved model here
                     stocks.loadModel(self.modelPath)
-                    stocks.train_data(epoch=3)
+                    stocks.train_data(epoch=4)
                 
                     #save the model 
                     stocks.saveModel(self.modelPath)

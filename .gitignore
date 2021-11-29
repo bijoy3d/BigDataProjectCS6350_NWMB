@@ -5,3 +5,4 @@ __init__.py
 stocks/.ipynb_checkpoints/Aplaca-Streaming-checkpoint.ipynb
 *.pyc
 *.pyc
+*.pyc
