@@ -1,23 +1,20 @@
+# Author : Bijoy Prakash
+# LSTM Model to Run on GPU using Numba
+
 import numpy as np
 from numba import jit
 import pickle
 
 
-def sigmoid(x):
-    """
-    Computes the element-wise sigmoid activation function for an array x.
-
-    Args:
-     `x`: the array where the function is applied
-     `derivative`: if set to True will return the derivative instead of the forward pass
-    """
-    x_safe = x + 1e-12
-    return 1 / (1 + np.exp(-x_safe))
+def sigmoid(input):
+    # Element wise sigmoid for input
+    i_safe = input + 1e-12
+    return 1/(1 + np.exp(-i_safe))
 
 
 @jit
 def init(train_data, targets, batch_size=2, debug=1, test=1):
-    #4 gates
+    #3 gates and input activation
     # input_activation = tanh(wa [inner] input + ua [inner] prev_output + ba)
     # input_gate  = sigmoid(wi [inner] input + ui [inner] prev_output + bi)
     # forget_gate = sigmoid(wf [inner] input + uf [inner] prev_output + bf)
@@ -36,7 +33,8 @@ def init(train_data, targets, batch_size=2, debug=1, test=1):
 
     # The number of records that would go inside the LSTM at one time. A sequence of records.
     batch_size = batch_size
-    numFeats = train_data.shape[1] ###### CHANGE IT TO GET DYNAMICALLY FROM INPUT
+    # Number of features used in the input. Get it from the number of columns in the shape of the data
+    numFeats = train_data.shape[1]
     # Enable debug logs
     debug = debug
 
@@ -96,9 +94,6 @@ def init(train_data, targets, batch_size=2, debug=1, test=1):
     input_weight_derivatives = 0
     output_weight_derivatives = 0
     bias_derivatives = 0
-    # Clean and init LSTM
-    #cleanLSTM()
-
 
     if test:
         batchSize = 1
@@ -120,11 +115,9 @@ def init(train_data, targets, batch_size=2, debug=1, test=1):
         bo[0]=0.1
     return wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives
 
+# Clean up the LSTM parameters    
 @jit
 def cleanLSTM(p):
-    # try:
-    #     wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives = p
-    # except:
     wa = p[0]
     ua = p[1]
     ba = p[2]
@@ -170,6 +163,8 @@ def cleanLSTM(p):
     bias_derivatives = 0
     return wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives
     
+# This function will go and update the LSTM parameters after the completion of the 
+# backward propagation
 @jit
 def update_lstmData(p, lr=.01):
     wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives = p
@@ -207,6 +202,7 @@ def update_lstmData(p, lr=.01):
     bo=bo
     return wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives
 
+# Debug function to print the LSTM parameters
 def printLSTMparms():
     lstmData = getLSTMparms()
     print('wa:', lstmData[0].shape)
@@ -236,10 +232,10 @@ def printLSTMparms():
     print('uo:', lstmData[10])
     print('bo:', lstmData[11])
 
+# Transform the dataset to batches. This is needed before we start LSTM training
 @jit
 def lstm_data_transform(batch_size, targets, train_data=None, ip=None):
-    """ Changes data to the format for LSTM training 
-for sliding window approach """
+    # Format data for LSTM training in sliding window batches
     # Prepare the list for the transformed data
     X = [np.complex64(x) for x in range(0)]
     y = [np.complex64(x) for x in range(0)]
@@ -247,40 +243,30 @@ for sliding window approach """
         data = ip
     else:
         data = train_data
-    # Loop of the entire data set
+
+    # Go over the full dataset
     for i in range(data.shape[0]):
-        # compute a new (sliding window) index
-        end_ix = i + batch_size
+        # next sliding windows index
+        end_index = i + batch_size
 
-        # if index is larger than the size of the dataset, we stop
-        if end_ix >= data.shape[0]:
+        # stop when index crosses the size of the dataset
+        if end_index >= data.shape[0]:
             break
-        # Get a sequence of data for x
-        seq_X = data[i:end_ix]
-        # Get only the last element of the sequency for y
-        seq_y = targets[i:end_ix]
-        # Append the list with sequencies
-        X.append(seq_X)
-        y.append(seq_y)
+        # input batch
+        sequence_X = data[i:end_index]
+        # Input batches target is last inputs output
+        sequence_y = targets[i:end_index]
+        # Add the window to the list
+        X.append(sequence_X)
+        y.append(sequence_y)
     # Make final arrays
-    x_array = np.array(X)
-    y_array = np.array(y)
-    return x_array, y_array
-
-def plog(*msg, f=0):
-    debug=0
-    if debug or f:
-        print(*msg)
-
-def setLSTMparms(parms):
-    wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo = parms
-
-def getLSTMparms():
-    return wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo
+    ip_arr = np.array(X)
+    op_arr = np.array(y)
+    return ip_arr, op_arr
 
 @jit
 def goForward(p,ipt, train=1):
-    #4 gates
+    #3 gates and input activation
     # input_activation = tanh(wa [inner] input + ua [inner] prev_output + ba)
     # input_gate  = sigmoid(wi [inner] input + ui [inner] prev_output + bi)
     # forget_gate = sigmoid(wf [inner] input + uf [inner] prev_output + bf)
@@ -294,16 +280,6 @@ def goForward(p,ipt, train=1):
 
     po = output
     ps = internal_state
-    #plog("wa : ", wa.T)
-    #plog("ipt : ", ipt)
-    #plog("ua : ", ua)
-    #plog("po : ", po)
-    #plog("ba : ", ba)
-
-    #plog("ipt T shape", ipt.T.shape)
-    #plog("po shape", po.shape)
-
-       # print("incoming input = ",ippo.T)
 
     input_plus_prev_output = np.row_stack((ipt.T, po))
     ippo = input_plus_prev_output
@@ -328,6 +304,7 @@ def goForward(p,ipt, train=1):
     # output
     output = np.multiply(np.tanh(internal_state), output_gate)
 
+    # Go here only for training. Skip for prediction
     if train:
         prev_input_activations.append(ia)
         prev_input_gates.append(input_gate)
@@ -336,15 +313,9 @@ def goForward(p,ipt, train=1):
         prev_internal_states.append(internal_state)
         prev_outputs.append(output)
 
-    #plog("input_activation = ",ia)
-    #plog("input gate : ", input_gate)
-    #plog("forget gate : ", forget_gate)
-    #plog("output gate : ",output_gate)
-    #plog("internal state", internal_state)
-    #plog("output = ",output)
-    #plog("----------------------------------")
     return wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives
 
+#Helper function for backward propagation
 @jit
 def stackWeights(p):
     wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives = p
@@ -362,6 +333,7 @@ def stackWeights(p):
 
     return wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives
 
+# Backwards propagation
 @jit
 def travelBack(p, targets, inputs):
 
@@ -369,9 +341,8 @@ def travelBack(p, targets, inputs):
     wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives = p
     tempo = np.zeros((1, 1))
     loss=0
-    #plog("Targets is",targets)
-    #plog("Inputs is",inputs)
 
+    # Go over all the targets
     for t in reversed(range(len(prev_outputs))):
 
         output = prev_outputs[t]
@@ -379,114 +350,104 @@ def travelBack(p, targets, inputs):
 
         next_forget_gate = np.zeros((1, 1)) if (t==len(prev_outputs)-1) else prev_forget_gates[t+1]
 
-        #plog("previous outputs = ", str(prev_outputs))
-        #plog("target = ",str(target))
-        #plog("output = ", str(output))
-
         # Track loss
         loss = (np.power((target - output),2))/2
-        #plog("loss = ", str(loss), f=0)
 
         # derivative of loss with respect to output
         der_loss_wrt_output = output - target
-        #plog("der_loss_wrt_output = ", der_loss_wrt_output)
 
         # derivative of output
         der_output = der_loss_wrt_output + delta_op_future
-        #plog("der_output = ", der_output)
 
         # derivative of internal state
         pog = prev_output_gates[t]
         ps = prev_internal_states[t]
         dfis = der_output * pog * (1 - (np.tanh(ps))**2 ) + (der_internal_state_future * next_forget_gate)
         der_internal_state_future = dfis
-        #plog("der internal state = ", dfis)
-        #plog("pog : ", pog)
-        #plog("ps : ", ps)
 
-
+        # derivative of input activation
         pig = prev_input_gates[t]
         pia = prev_input_activations[t]
         der_input_activation = dfis * pig * (1 - pia**2)
-        #plog("der_input_activation = ", der_input_activation)
         stacked_ders = np.copy(der_input_activation)
 
+        # derivative of input gate
         der_inputg = dfis * pia * pig * (1 - pig)
         stacked_ders = np.row_stack((stacked_ders, der_inputg))
-        #plog("der_input = ", der_inputg)
 
+        # derivative of forget gate
         pps = tempo if t==0 else prev_internal_states[t-1] 
         pfg = prev_forget_gates[t]
         der_forgetg = dfis * pps * pfg * (1 - pfg)
         stacked_ders = np.row_stack((stacked_ders, der_forgetg))
-        #plog("der_forget = ", der_forgetg)   
-
-        #plog("pps : ", pps, t-1)
-        #plog("pfg : ", pfg)
-        #plog("dfis : ", str(dfis))
-
         der_outputg = der_output * np.tanh(ps) * pog * (1 - pog)
         stacked_ders = np.row_stack((stacked_ders, der_outputg))
-        #plog("der_output = ", der_outputg)
 
         wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives = stackWeights(p)
 
         der_input_state = np.dot(stacked_ip_weights, stacked_ders)
-        #plog("der_input_state = ", der_input_state)
 
+        # output gate derivative
         der_output_state = np.dot(stacked_op_weights, stacked_ders)
-        #plog("der_output_state = ", der_output_state)
         delta_op_future = der_output_state
 
-        #plog("inputs t is : ",str(t), np.array([inputs[0][t]]))
         der_input_weight = np.dot(stacked_ders, np.array([inputs[0][t]]))
         input_weight_derivatives += der_input_weight
-        #plog("der_input_weight : ", der_input_weight)
 
         po = tempo if t==0 else prev_outputs[t-1] 
         der_op_weight = np.dot(stacked_ders, po)
         output_weight_derivatives += der_op_weight
-        #plog("der_op_weight : ", der_op_weight)
 
         bias_derivatives += stacked_ders
     return wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives
 
+# Model Training function
 @jit
 def train(p,batch_size, targets, train_data, epoch=2, lr=.01):
+    #  Get prepared window sequenced data
     ip_batches, op_batches = lstm_data_transform(batch_size, targets, train_data=train_data)
 
-    #print(op_batches)
+    # Run it epoch number of times
     runit=1
     for runit in range (epoch):
         print("Running EPOCH ", runit)
         count = 1
         for ipbatch,opbatch in zip(ip_batches, op_batches):
+            # Clean LSTM parameters after every back propagation is complete
             p=cleanLSTM(p)
             if count % 100 ==0:
                 print("Running Batch", count)
+            # Do forward propagation for every batch
             for ip in ipbatch:
                 p1 = goForward(p,np.array([ip]))
+            # Travel back and redistribute the weights
             p2 = travelBack(p1, opbatch, np.array([ipbatch]))
+            # Update the LSTM parameters with the new weights adjusted by learning rate
             p3=update_lstmData(p2, lr)
             p=p3
 
             count+=1
     return p
 
+# Prediction function
 @jit
 def goPredict(p, targets, inputs, batch_size, opscaler=None, ipscaler=None):
 
     wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives = p
+    # Transform data for prediction
     ip_batches, _ = lstm_data_transform(batch_size, targets, ip=inputs)
 
+    # Run for each window in the batch
     for ipbatch in ip_batches:
+        # start with a clean LSTM model
         p=cleanLSTM(p)
-        #plog("Round "+str(count)," ipbatch is : ", ipbatch)
 
+        # for each batch go forward and get the output. Last batch output is the prediction
         for ip in ipbatch:
             p = goForward(p, np.array([ip]), train=0)
             wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives = p
 
+    # De-Scale the output if it is requested
     if ipscaler and opscaler:
         print(f'Current Price : {round(ipscaler.inverse_transform(np.array([ip]))[0][0],3)} Next Price : {round(opscaler.inverse_transform(output)[0][0], 3)} \n')
         return round(opscaler.inverse_transform(output)[0][0], 3)
@@ -494,38 +455,33 @@ def goPredict(p, targets, inputs, batch_size, opscaler=None, ipscaler=None):
         print(f'input {ip} output {output}')
         return output
 
+# Validation function used when splitting the model into train test slipts
 @jit
 def goValidate(p, inputs, targets, batch_size, opscaler=None, ipscaler=None, filename="pred.txt"):
 
     ip_batches, _ = lstm_data_transform(batch_size, targets, ip=inputs)
-#     file = open(filename,"w")
-#     file.close()
-#    print(ip_batches)
     count = 0
     for ipbatch in ip_batches:
         p=cleanLSTM(p)
 
         for ip in ipbatch:
-#            print(ip)
             target = np.array([[targets.iloc[count]['target']]])
-            ##plog("Round "+str(count)," ip is ",ip)
             p = goForward(p,np.array([ip]), train=0)
             wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives = p
             if ipscaler and opscaler:
                 res = f'Current : {round(ipscaler.inverse_transform(np.array([ip]))[0][0],3)} \tTarget : {round(opscaler.inverse_transform(target)[0][0], 3)} \tPredicted : {round(opscaler.inverse_transform(output)[0][0], 3)}\n'
                 print(res)
-#                 with open(filename, "a") as myfile:
-#                     myfile.write(res)
-                #plog(res)
             else:
                 print(f'input {ip} output {output}')
 
         count+=1
 
+# Pickle and save a copy of the model. Saves a copy of the LSTM parameters
 def saveModel(filename, p):
     with open(filename,"wb") as fp:
         pickle.dump(p, fp)
 
+# Loads a pickled copy of the LSTM parameters from a local file and initializes the model
 def loadModel(filename):
     with open(filename,"rb") as fp:
         pickeledModel = pickle.load(fp)

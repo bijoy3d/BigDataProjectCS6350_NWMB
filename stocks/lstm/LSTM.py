@@ -5,16 +5,10 @@
 import numpy as np
 import pickle
 
-def sigmoid(x):
-    """
-    Computes the element-wise sigmoid activation function for an array x.
-
-    Args:
-     `x`: the array where the function is applied
-     `derivative`: if set to True will return the derivative instead of the forward pass
-    """
-    x_safe = x + 1e-12
-    return 1 / (1 + np.exp(-x_safe))
+def sigmoid(input):
+    # Element wise sigmoid for input
+    i_safe = input + 1e-12
+    return 1/(1 + np.exp(-i_safe))
 
 class LSTM():
     def __init__(self, train_data, targets, batch_size=2, debug=1, test=1):
@@ -225,9 +219,9 @@ class LSTM():
             y.append(sequence_y)
         
         # Final dataset for training
-        ip_array = np.array(X)
-        op_array = np.array(y)
-        return ip_array, op_array
+        ip_arr = np.array(X)
+        op_arr = np.array(y)
+        return ip_arr, op_arr
 
 
     # Function for debugging
@@ -331,7 +325,7 @@ class LSTM():
         plog("Targets is",targets)
         plog("Inputs is",inputs)
 
-        # Go over all input batches
+        # Go over all the targets
         for t in reversed(range(len(self.prev_outputs))):
 
             output = self.prev_outputs[t]
