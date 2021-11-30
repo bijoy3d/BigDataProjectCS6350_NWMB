@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
+# Author : Bijoy Prakash
 
 import numpy as np
 import pickle
@@ -17,16 +18,18 @@ def sigmoid(x):
 
 class LSTM():
     def __init__(self, train_data, targets, batch_size=2, debug=1, test=1):
-        #4 gates
-        # input_activation = tanh(wa [inner] input + ua [inner] prev_output + ba)
+        # 3 gates
+        # 
         # input_gate  = sigmoid(wi [inner] input + ui [inner] prev_output + bi)
         # forget_gate = sigmoid(wf [inner] input + uf [inner] prev_output + bf)
         # output_gate = sigmoid(wo [inner] input + uo [inner] prev_output + bo)
-
+        # Input activation
+        # input_activation = tanh(wa [inner] input + ua [inner] prev_output + ba)
         # 2 states
         # internal_state = (input_activation [Element wise] input_gate) + (forget_gate [Element wise] prev_internal_state)
         # output = tanh(internal_state) [Element wise] output_gate
 
+        # Batch size should always be less than the total size of the dataset
         if batch_size >= len(train_data):
             print(f'Batch Size {batch_size} should be less than the size of the dataset {len(train_data)}')
             return None
@@ -36,7 +39,8 @@ class LSTM():
         
         # The number of records that would go inside the LSTM at one time. A sequence of records.
         self.batch_size = batch_size
-        numFeats = train_data.shape[1] ###### CHANGE IT TO GET DYNAMICALLY FROM INPUT
+        # Number of features used in the input. Get it from the number of columns in the shape of the data
+        numFeats = train_data.shape[1]
         # Enable debug logs
         self.debug = debug
         
@@ -70,6 +74,7 @@ class LSTM():
         self.cleanLSTM()
 
 
+        # Static input for test mode
         if self.test:
             self.batchSize = 1
             self.wa[0]=0.45
@@ -88,7 +93,9 @@ class LSTM():
             self.wo[1]=0.4
             self.uo[0]=0.25
             self.bo[0]=0.1
-        
+
+    
+    # Clean up the LSTM parameters    
     def cleanLSTM(self):
         # Forward Propogation Parameters
         self.prev_input_activation = 0
@@ -122,6 +129,8 @@ class LSTM():
         self.output_weight_derivatives = 0
         self.bias_derivatives = 0
 
+    # This function will go and update the LSTM parameters after the completion of the 
+    # backward propagation
     def update_lstmData(self, lr=.01):
         wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo = self.getLSTMparms()
         dip = self.input_weight_derivatives
@@ -157,6 +166,7 @@ class LSTM():
         self.uo=uo
         self.bo=bo
 
+    # Debug function to print the LSTM parameters
     def printLSTMparms(self):
         lstmData = self.getLSTMparms()
         print('wa:', lstmData[0].shape)
@@ -186,47 +196,56 @@ class LSTM():
         print('uo:', lstmData[10])
         print('bo:', lstmData[11])
 
+
+    # Transform the dataset to batches. This is needed before we start LSTM training
     def lstm_data_transform(self, ip=None):
-        """ Changes data to the format for LSTM training 
-    for sliding window approach """
+        # Format data for LSTM training in sliding window batches
         # Prepare the list for the transformed data
         X, y = list(), list()
         if ip is not None:
             data = ip
         else:
             data = self.train_data
-        # Loop of the entire data set
-        for i in range(data.shape[0]):
-            # compute a new (sliding window) index
-            end_ix = i + self.batch_size
 
-            # if index is larger than the size of the dataset, we stop
-            if end_ix >= data.shape[0]:
+        # Go over the full dataset
+        for i in range(data.shape[0]):
+            # next sliding windows index
+            end_index = i + self.batch_size
+
+            # stop when index crosses the size of the dataset
+            if end_index >= data.shape[0]:
                 break
-            # Get a sequence of data for x
-            seq_X = data[i:end_ix]
-            # Get only the last element of the sequency for y
-            seq_y = self.targets[i:end_ix]
-            # Append the list with sequencies
-            X.append(seq_X)
-            y.append(seq_y)
-        # Make final arrays
-        x_array = np.array(X)
-        y_array = np.array(y)
-        return x_array, y_array
-    
+
+            # input batch
+            sequence_X = data[i:end_index]
+            # Input batches target is last inputs output
+            sequence_y = self.targets[i:end_index]
+            # Add the window to the list
+            X.append(sequence_X)
+            y.append(sequence_y)
+        
+        # Final dataset for training
+        ip_array = np.array(X)
+        op_array = np.array(y)
+        return ip_array, op_array
+
+
+    # Function for debugging
     def plog(self, *msg, f=0):
         if self.debug or f:
             print(*msg)
 
+    # Set all LSTM parameters
     def setLSTMparms(self, parms):
         self.wa, self.ua, self.ba, self.wi, self.ui, self.bi, self.wf, self.uf, self.bf, self.wo, self.uo, self.bo = parms
         
+    # Get all LSTM parameters
     def getLSTMparms(self):
         return self.wa, self.ua, self.ba, self.wi, self.ui, self.bi, self.wf, self.uf, self.bf, self.wo, self.uo, self.bo
 
+    # Forward Propogation
     def goForward(self, ipt, train=1):
-        #4 gates
+        #3 gates and input activation
         # input_activation = tanh(wa [inner] input + ua [inner] prev_output + ba)
         # input_gate  = sigmoid(wi [inner] input + ui [inner] prev_output + bi)
         # forget_gate = sigmoid(wf [inner] input + uf [inner] prev_output + bf)
@@ -270,6 +289,7 @@ class LSTM():
         # output
         self.output = np.multiply(np.tanh(self.internal_state), self.output_gate)
         
+        # Enter this loop only if it is training. If we are predicting then just skip this and return output
         if train:
             self.prev_input_activations.append(ia)
             self.prev_input_gates.append(self.input_gate)
@@ -287,6 +307,7 @@ class LSTM():
         plog("----------------------------------")
         return self.output
         
+    # Weight stack helper function
     def stackWeights(self):
         stacked_ip_weights = np.copy(self.wa)
         stacked_ip_weights = np.column_stack((stacked_ip_weights, self.wi))
@@ -300,16 +321,17 @@ class LSTM():
         stacked_op_weights = np.column_stack((stacked_op_weights, self.uo))
         self.stacked_op_weights = stacked_op_weights
 
+    # Backwards propagation
     def travelBack(self, targets, inputs):
 
         plog = self.plog
-        # Unpack parameters
         wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo = self.getLSTMparms()
         tempo = np.zeros((1, 1))
         loss=0
         plog("Targets is",targets)
         plog("Inputs is",inputs)
 
+        # Go over all input batches
         for t in reversed(range(len(self.prev_outputs))):
 
             output = self.prev_outputs[t]
@@ -342,17 +364,19 @@ class LSTM():
             plog("pog : ", pog)
             plog("ps : ", ps)
 
-
+            # derivative of input activation
             pig = self.prev_input_gates[t]
             pia = self.prev_input_activations[t]
             der_input_activation = dfis * pig * (1 - pia**2)
             plog("der_input_activation = ", der_input_activation)
             stacked_ders = np.copy(der_input_activation)
 
+            # input  gate derivative
             der_inputg = dfis * pia * pig * (1 - pig)
             stacked_ders = np.row_stack((stacked_ders, der_inputg))
             plog("der_input = ", der_inputg)
 
+            # forget gate derivative
             pps = tempo if t==0 else self.prev_internal_states[t-1] 
             pfg = self.prev_forget_gates[t]
             der_forgetg = dfis * pps * pfg * (1 - pfg)
@@ -363,6 +387,7 @@ class LSTM():
             plog("pfg : ", pfg)
             plog("dfis : ", str(dfis))
 
+            # output gate derivative
             der_outputg = der_output * np.tanh(ps) * pog * (1 - pog)
             stacked_ders = np.row_stack((stacked_ders, der_outputg))
             plog("der_output = ", der_outputg)
@@ -370,13 +395,16 @@ class LSTM():
             self.stackWeights()
 
 
+            # input state derivative
             der_input_state = np.dot(self.stacked_ip_weights, stacked_ders)
             plog("der_input_state = ", der_input_state)
 
+            # output state derivative
             der_output_state = np.dot(self.stacked_op_weights, stacked_ders)
             plog("der_output_state = ", der_output_state)
             self.delta_op_future = der_output_state
 
+            # weight redistribution
             plog("inputs t is : ",str(t), np.array([inputs[0][t]]))
             der_input_weight = np.dot(stacked_ders, np.array([inputs[0][t]]))
             self.input_weight_derivatives += der_input_weight
@@ -390,43 +418,52 @@ class LSTM():
             self.bias_derivatives += stacked_ders
         return loss
     
+    # Model Training function
     def train(self, epoch=2, lr=.01):
         plog = self.plog
+
+        # Get prepared window sequenced data
         ip_batches, op_batches = self.lstm_data_transform()
         
+        # Run it epoch number of times
         for runit in range (epoch):
             print("Running EPOCH ", runit+1)
             count = 1
             for ipbatch,opbatch in zip(ip_batches, op_batches):
+                # Clean LSTM parameters after every back propagation is complete
                 self.cleanLSTM()
                 if count % 100 ==0:
                     print("Runnign Batch "+str(count))
-                plog("Round "+str(count)," opbatch is : ", opbatch)
+                # Do forward propagation for every batch
                 for ip in ipbatch:
                     plog("Round "+str(count)," ip is ",ip)
                     self.goForward(np.array([ip]))
+                # Travel back and redistribute the weights
                 loss = self.travelBack(opbatch, np.array([ipbatch]))
-                plog("Round "+str(count)," Forward and Backward DONE", f=0)
-                plog("Round "+str(count)," OP DONE")
-                plog("Round "+str(count)," OLD WEIGHTS")
+                # Update the LSTM parameters with the new weights adjusted by learning rate
                 self.update_lstmData(lr)
-                plog("Round "+str(count), " NEW WEIGHTS")
                 count+=1
             print("loss at epoch",runit+1,"is ", loss)
     
+    # Prediction function
     def goPredict(self, inputs, opscaler=None, ipscaler=None):
         plog = self.plog
+        # Transform data for prediction
         ip_batches, _ = self.lstm_data_transform(inputs)
         count = 1
 
+        # Run for each window in the batch
         for ipbatch in ip_batches:
+            # start with a clean LSTM model
             self.cleanLSTM()
             plog("Round "+str(count)," ipbatch is : ", ipbatch)
 
+            # for each batch go forward and get the output. Last batch output is the prediction
             for ip in ipbatch:
                 plog("Round "+str(count)," ip is ",ip)
                 output = self.goForward(np.array([ip]), train=0)
 
+        # De-Scale the output if it is requested
         if ipscaler and opscaler:
             print(f'Current Price : {round(ipscaler.inverse_transform(np.array([ip]))[0][0],3)} Next Price : {round(opscaler.inverse_transform(output)[0][0], 3)} \n')
             return round(opscaler.inverse_transform(output)[0][0], 3)
@@ -434,6 +471,7 @@ class LSTM():
             print(f'input {ip} output {output}')
             return output
         
+    # Validation function used when splitting the model into train test slipts
     def goValidate(self, inputs, targets, opscaler=None, ipscaler=None, filename="pred.txt"):
         plog = self.plog
         ip_batches, _ = self.lstm_data_transform(inputs)
@@ -459,11 +497,13 @@ class LSTM():
 
                 count+=1
 
+    # Pickle and save a copy of the model. Saves a copy of the LSTM parameters
     def saveModel(self, filename):
         with open(filename,"wb") as fp:
             p=self.getLSTMparms()
             pickle.dump(p, fp)
 
+    # Loads a pickled copy of the LSTM parameters from a local file and initializes the model
     def loadModel(self, filename):
         with open(filename,"rb") as fp:
             pickeledModel = pickle.load(fp)
@@ -480,48 +520,3 @@ class LSTM():
             self.wo=pickeledModel[9]
             self.uo=pickeledModel[10]
             self.bo=pickeledModel[11]
-
-    
-## EXAMPLE CODE TO PREPARE DATASET AND RUN
-
-# dataset=StringIO("""Date,Open,High,Low,Close,Volume,Trade_count,vwap
-# 2015-12-01 09:00:00+00:00,118.88,118.94,118.88,118.94,1145,5,118.902052
-# 2015-12-01 09:15:00+00:00,118.77,118.77,118.77,118.77,200,1,118.77
-# 2015-12-01 09:30:00+00:00,118.69,118.69,118.6,118.6,900,4,118.61
-# 2015-12-01 09:45:00+00:00,118.64,118.65,118.64,118.65,3580,5,118.648883
-# 2015-12-01 10:00:00+00:00,118.65,118.65,118.55,118.55,1820,4,118.611538
-# 2015-12-01 10:15:00+00:00,118.55,118.6,118.55,118.6,880,5,118.5625
-# 2015-12-01 10:30:00+00:00,118.55,118.55,118.5,118.5,1878,5,118.513312
-# 2015-12-01 10:45:00+00:00,118.59,118.72,118.59,118.72,2499,10,118.628431
-# 2015-12-01 11:00:00+00:00,118.71,118.9,118.71,118.9,2842,11,118.86064
-# 2015-12-01 11:15:00+00:00,118.87,118.87,118.87,118.87,300,2,118.87
-# 2015-12-01 11:30:00+00:00,118.78,118.8,118.76,118.8,3914,22,118.785876
-# 2015-12-01 11:45:00+00:00,118.8,118.99,118.77,118.9,7900,37,118.893542
-# 2015-12-01 12:00:00+00:00,118.88,118.98,118.84,118.84,6540,34,118.922648
-# 2015-12-01 12:15:00+00:00,118.82,118.84,118.77,118.77,5603,28,118.804962
-# 2015-12-01 12:30:00+00:00,118.77,118.89,118.76,118.88,7612,31,118.824002
-# """)
-# ip = pd.read_table(dataset, sep=",")
-
-# # ip=pd.read_csv('../dataset/apple_5min_data.csv')
-
-
-# opscaler = MinMaxScaler()
-# ipscaler = MinMaxScaler()
-# inputs=ip.copy()
-# inputs.drop("Date", axis=1, inplace=True)
-
-# targets = inputs.filter(["Open"], axis=1)
-# targets.columns = ['target']
-# targets["target"]=targets['target'][1:].reset_index(drop=True)
-# targets.iloc[-1]['target'] = targets.iloc[:-1]['target'].mean()
-
-# inputs[['Open','High','Low','Close','Volume','Trade_count','vwap']] = ipscaler.fit_transform(inputs[['Open','High','Low','Close','Volume','Trade_count','vwap']])
-# targets[['target']] = opscaler.fit_transform(targets[['target']])
-
-# intrain, intest, optrain, optest = train_test_split(inputs, targets, test_size=0.2, shuffle=False)
-
-
-# lstm = LSTM(train_data=intrain, targets=optrain, batch_size=4, debug=0, test=0)
-# lstm.train(epoch=2, lr=1)
-# lstm.goValidate(intest, optest, opscaler, ipscaler)
