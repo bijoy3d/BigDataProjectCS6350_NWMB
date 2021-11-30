@@ -202,36 +202,6 @@ def update_lstmData(p, lr=.01):
     bo=bo
     return wa, ua, ba, wi, ui, bi, wf, uf, bf, wo, uo, bo, output, internal_state, prev_input_activations, prev_input_gates, prev_forget_gates, prev_output_gates, prev_internal_states, prev_outputs, delta_op_future, der_internal_state_future, stacked_ip_weights, stacked_op_weights, input_weight_derivatives, output_weight_derivatives, bias_derivatives
 
-# Debug function to print the LSTM parameters
-def printLSTMparms():
-    lstmData = getLSTMparms()
-    print('wa:', lstmData[0].shape)
-    print('ua:', lstmData[1].shape)
-    print('ba:', lstmData[2].shape)
-    print('wi:', lstmData[3].shape)
-    print('ui:', lstmData[4].shape)
-    print('bi:', lstmData[5].shape)
-    print('wf:', lstmData[6].shape)
-    print('uf:', lstmData[7].shape)
-    print('bf:', lstmData[8].shape)
-    print('wo:', lstmData[9].shape)
-    print('uo:', lstmData[10].shape)
-    print('bo:', lstmData[11].shape)
-
-
-    print('wa:', lstmData[0])
-    print('ua:', lstmData[1])
-    print('ba:', lstmData[2])
-    print('wi:', lstmData[3])
-    print('ui:', lstmData[4])
-    print('bi:', lstmData[5])
-    print('wf:', lstmData[6])
-    print('uf:', lstmData[7])
-    print('bf:', lstmData[8])
-    print('wo:', lstmData[9])
-    print('uo:', lstmData[10])
-    print('bo:', lstmData[11])
-
 # Transform the dataset to batches. This is needed before we start LSTM training
 @jit
 def lstm_data_transform(batch_size, targets, train_data=None, ip=None):
